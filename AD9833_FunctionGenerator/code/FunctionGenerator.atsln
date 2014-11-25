@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Atmel Studio Solution File, Format Version 11.00
+Project("{54F91283-7BC4-4236-8FF9-10F437C3AD48}") = "FunctionGenerator", "FunctionGenerator\FunctionGenerator.cproj", "{A8C9FC6B-715E-4936-9D9E-513F9609679C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|AVR = Debug|AVR
+		Release|AVR = Release|AVR
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A8C9FC6B-715E-4936-9D9E-513F9609679C}.Debug|AVR.ActiveCfg = Debug|AVR
+		{A8C9FC6B-715E-4936-9D9E-513F9609679C}.Debug|AVR.Build.0 = Debug|AVR
+		{A8C9FC6B-715E-4936-9D9E-513F9609679C}.Release|AVR.ActiveCfg = Release|AVR
+		{A8C9FC6B-715E-4936-9D9E-513F9609679C}.Release|AVR.Build.0 = Release|AVR
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
