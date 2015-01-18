@@ -63,6 +63,7 @@ static void Error_Handler(void);
 /* Private functions ---------------------------------------------------------*/
 
 GPIO_InitTypeDef GPIO_InitStruct_ADC;
+TIM_HandleTypeDef        TimHandle;
 
 void AD9245_init(){
   GPIO_InitStruct_ADC.Pin = 0xFFFF;
@@ -83,6 +84,61 @@ void Test_init(){
 inline uint16_t AD9245_getValue(){                             //this function takes 2 clock cycles
   uint16_t ret = (GPIOC->IDR & 0x7FFF);
   return ret;
+}
+
+void init_timer()
+{
+  uint32_t TickPriority=1;
+  
+  RCC_ClkInitTypeDef sClokConfig;
+  uint32_t uwTimclock, uwAPB1Prescaler = 0;
+  uint32_t pFLatency;
+  
+    /*Configure the TIM5 IRQ priority */
+  HAL_NVIC_SetPriority(TIM5_IRQn, TickPriority ,0); 
+  
+  /* Get clock configuration */
+  HAL_RCC_GetClockConfig(&sClokConfig, &pFLatency);
+  
+  /* Get APB1 prescaler */
+  uwAPB1Prescaler = sClokConfig.APB1CLKDivider;
+  
+  /* Compute TIM5 clock */
+  if (uwAPB1Prescaler == 0) 
+  {
+    uwTimclock = HAL_RCC_GetPCLK1Freq();
+  }
+  else
+  {
+    uwTimclock = 2*HAL_RCC_GetPCLK1Freq();
+  }
+
+  /* Initialize TIM5 */
+  TimHandle.Instance = TIM5;
+    
+  /* Initialize TIMx peripheral as follow:
+       + Period = [(TIM5CLK/1000) - 1]. to have a (1/1000) s time base.
+       + Prescaler = (uwTimclock/1000000 - 1) to have a 1MHz counter clock.
+       + ClockDivision = 0
+       + Counter direction = Up
+  */
+  TimHandle.Init.Period = 0x110;
+  TimHandle.Init.Prescaler = 0;
+  TimHandle.Init.ClockDivision = 0;
+  TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
+  if(HAL_TIM_Base_Init(&TimHandle) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+  
+  /* Start the TIM time Base generation in interrupt mode */
+  if(HAL_TIM_Base_Start_IT(&TimHandle) != HAL_OK)
+  {
+    /* Starting Error */
+    Error_Handler();
+  }
+  
 }
 
 uint16_t sinTable[] = {
@@ -182,6 +238,14 @@ uint16_t sinTable[] = {
 0x53,0x4c,0x46,0x3f,0x39,0x33,0x2e,0x29,
 0x24,0x1f,0x1b,0x17,0x14,0x10,0xd,0xb,
 0x8,0x6,0x4,0x3,0x2,0x1,0x0,0x0,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
+0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,0x2000,
 0x0,0x0,0x1,0x2,0x3,0x5,0x7,0x9,
 0xc,0xf,0x12,0x15,0x19,0x1d,0x22,0x26,
 0x2b,0x31,0x36,0x3c,0x42,0x49,0x50,0x57,
@@ -220,6 +284,7 @@ uint16_t sinTable[] = {
   * @param  None
   * @retval None
   */
+
 int main(void)
 {
   /* STM32F4xx HAL library initialization:
@@ -238,10 +303,13 @@ int main(void)
   __GPIOB_CLK_ENABLE();
   __GPIOC_CLK_ENABLE();
     
-  //AD9117_init();
-  //AD9245_init();
+  AD9117_init();
+  AD9245_init();
   Test_init();
-    
+  
+  __TIM5_CLK_ENABLE();
+  init_timer();
+  
   #define DATA_BUFF_SIZE 100
   float data_input[DATA_BUFF_SIZE];
   for (int i=0;i<DATA_BUFF_SIZE;++i){ data_input[i]=0; }    //initialization
@@ -249,11 +317,15 @@ int main(void)
   
   #define FILTER_MAX_ORDER 100
   float filter_coeff[FILTER_MAX_ORDER];
-  for (int i=0;i<FILTER_MAX_ORDER;++i){ data_input[i]=i*2+0.1; } //for test
-  uint16_t filter_selected_order=5; 
+  for (int i=0;i<FILTER_MAX_ORDER;++i){ filter_coeff[i]=0; } //for test
+  filter_coeff[0]=1;
+  uint16_t filter_selected_order=6; 
   
   while (1)
   {
+    
+    __HAL_TIM_SetCounter(&TimHandle,0);
+    
     GPIOB->BSRRL = 0x8000;
     
     uint16_t value = AD9245_getValue();
@@ -276,6 +348,8 @@ int main(void)
     GPIOA->BSRRL = uiOutput;
     GPIOA->BSRRH = ~(uiOutput);
     GPIOB->BSRRH = AD9117_DCLKIO_PIN;
+    
+    while (__HAL_TIM_GetCounter(&TimHandle)<100) {}     //85
   }
 }
 
@@ -318,10 +392,10 @@ static void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = 0x10;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 12;//12;  16
-  RCC_OscInitStruct.PLL.PLLN = 511;//511;   400
+  RCC_OscInitStruct.PLL.PLLM = 16;//12;  16
+  RCC_OscInitStruct.PLL.PLLN = 400;//511;   400
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
-  RCC_OscInitStruct.PLL.PLLQ = 5;//5;   7
+  RCC_OscInitStruct.PLL.PLLQ = 7;//5;   7
   if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();

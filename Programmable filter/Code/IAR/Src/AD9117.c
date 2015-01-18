@@ -109,9 +109,13 @@ void AD9117_init(){
     AD9117_setPowerDown(0,1,0,1,0,1,0,0);
     AD9117_setDataControl(0,1,1,0,1,0,0);
     wait_ms(10);
-    AD9117_setCalControl(0,0,0,1,1,0);
+    //AD9117_setCalControl(0,0,0,1,1,0);
+    //wait_ms(10);
+    AD9117_setIRCML(1,0x1E);    //0x10
     wait_ms(10);
-    AD9117_setIRCML(1,0x10);    //0x10
+    AD9117_setIRSET(1,0x00);    //0x10
+    wait_ms(10);
+    AD9117_setIDacGain(0x00);//deosnt affect the dc offset
     wait_ms(10);
 }
 
