@@ -141,6 +141,46 @@ void init_timer()
   
 }
 
+GPIO_InitTypeDef  GPIO_InitStruct_mDAC;
+
+#define MDAC_SYNC       GPIO_PIN_14
+#define MDAC_SDIN       GPIO_PIN_15
+#define MDAC_SCLK       GPIO_PIN_1
+
+void init_mDAC(){
+  //pins initialization
+  GPIO_InitStruct_mDAC.Pin = MDAC_SCLK | MDAC_SYNC | MDAC_SDIN;
+  GPIO_InitStruct_mDAC.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct_mDAC.Pull = GPIO_NOPULL;
+  GPIO_InitStruct_mDAC.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_mDAC); 
+  
+  //set all pins by default to High
+  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+}
+
+void mDAC(uint16_t data){ //max 16383
+  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_RESET); 
+  
+  for (int i=14;i>-1;i--){
+    wait_ms(1);
+    if (data & (1<<i)){
+      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+    } else {
+      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
+    }
+    wait_ms(1);
+    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_RESET); 
+    
+    wait_ms(1);
+    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
+  }
+  
+  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
+}
+
 uint16_t sinTable[] = {
   0x2000,0x2032,0x2065,0x2097,0x20c9,0x20fc,0x212e,0x2160,
 0x2192,0x21c5,0x21f7,0x2229,0x225b,0x228d,0x22c0,0x22f2,
@@ -307,6 +347,9 @@ int main(void)
   AD9245_init();
   Test_init();
   
+  init_mDAC();
+  mDAC(8192);
+  
   __TIM5_CLK_ENABLE();
   init_timer();
   
@@ -321,6 +364,8 @@ int main(void)
   filter_coeff[0]=1;
   uint16_t filter_selected_order=6; 
   
+  uint32_t counter=0;
+  
   while (1)
   {
     
@@ -329,6 +374,10 @@ int main(void)
     GPIOB->BSRRL = 0x8000;
     
     uint16_t value = AD9245_getValue();
+    
+    value = sinTable[counter];
+    counter++;
+    if(counter>1023) counter=0;
     
     uint16_t i_d=i_data_input;
     data_input[i_data_input++]=(float)(value&0x7FFF);
