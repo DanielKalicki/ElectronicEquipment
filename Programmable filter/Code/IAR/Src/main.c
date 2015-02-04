@@ -145,40 +145,48 @@ GPIO_InitTypeDef  GPIO_InitStruct_mDAC;
 
 #define MDAC_SYNC       GPIO_PIN_14
 #define MDAC_SDIN       GPIO_PIN_15
-#define MDAC_SCLK       GPIO_PIN_1
+#define MDAC_SCLK       GPIO_PIN_13
 
 void init_mDAC(){
   //pins initialization
-  GPIO_InitStruct_mDAC.Pin = MDAC_SCLK | MDAC_SYNC | MDAC_SDIN;
+  /*GPIO_InitStruct_mDAC.Pin =  MDAC_SYNC | MDAC_SDIN;
   GPIO_InitStruct_mDAC.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct_mDAC.Pull = GPIO_NOPULL;
   GPIO_InitStruct_mDAC.Speed = GPIO_SPEED_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_mDAC); 
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_mDAC); */
   
+  GPIO_InitStruct_ADC.Pin = MDAC_SDIN | MDAC_SYNC | MDAC_SCLK;
+  GPIO_InitStruct_ADC.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct_ADC.Pull = GPIO_NOPULL;
+  GPIO_InitStruct_ADC.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_ADC); 
+  
+  wait_ms(10);
   //set all pins by default to High
   HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
   HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
   HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+  for (int i=0;i<100;i++) wait_ms(10);
 }
 
 void mDAC(uint16_t data){ //max 16383
+  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
+  
   HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_RESET); 
   
-  for (int i=14;i>-1;i--){
-    wait_ms(1);
+  for (int i=15;i>-1;i--){
     if (data & (1<<i)){
       HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
     } else {
       HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
     }
-    wait_ms(1);
     HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_RESET); 
     
-    wait_ms(1);
     HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
   }
   
   HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
 }
 
 uint16_t sinTable[] = {
@@ -345,10 +353,10 @@ int main(void)
     
   AD9117_init();
   AD9245_init();
-  Test_init();
-  
+  //Test_init();
   init_mDAC();
-  mDAC(8192);
+  
+  mDAC(8300);
   
   __TIM5_CLK_ENABLE();
   init_timer();
@@ -365,19 +373,20 @@ int main(void)
   uint16_t filter_selected_order=6; 
   
   uint32_t counter=0;
+  uint16_t mDacValue=8192;
   
   while (1)
   {
     
     __HAL_TIM_SetCounter(&TimHandle,0);
     
-    GPIOB->BSRRL = 0x8000;
+    //GPIOB->BSRRL = 0x8000;
     
     uint16_t value = AD9245_getValue();
     
     value = sinTable[counter];
     counter++;
-    if(counter>1023) counter=0;
+    if(counter>1023) { counter=0; /*mDAC(mDacValue); mDacValue+=1; if(mDacValue>=16384) mDacValue=0;*/}
     
     uint16_t i_d=i_data_input;
     data_input[i_data_input++]=(float)(value&0x7FFF);
@@ -390,7 +399,7 @@ int main(void)
     }
     uint16_t uiOutput=(uint16_t)fOutput;
     
-    GPIOB->BSRRH = 0x8000;
+    //GPIOB->BSRRH = 0x8000;
 
     #define AD9117_DCLKIO_PIN GPIO_PIN_9
     GPIOB->BSRRL = AD9117_DCLKIO_PIN;
