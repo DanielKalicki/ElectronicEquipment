@@ -40,6 +40,7 @@
 #include "main.h"
 #include <stdio.h>
 #include "AD9117.h"
+#include "stm32f4xx_hal_uart.h"
 
 /** @addtogroup STM32F4xx_HAL_Examples
   * @{
@@ -327,18 +328,90 @@ uint16_t sinTable[] = {
 0x1d0e,0x1d40,0x1d73,0x1da5,0x1dd7,0x1e09,0x1e3b,0x1e6e,
 0x1ea0,0x1ed2,0x1f04,0x1f37,0x1f69,0x1f9b,0x1fce,0x2000};
 
-/**
-  * @brief  Main program
-  * @param  None
-  * @retval None
-  */
+
+char uart_sendChar(char ch);
+
+UART_HandleTypeDef UartHandle;
+
+
+void initUART(){
+  
+  /*##-1- Configure the UART peripheral ######################################*/
+  /* Put the USART peripheral in the Asynchronous mode (UART Mode) */
+  /* UART1 configured as follow:
+      - Word Length = 8 Bits
+      - Stop Bit = One Stop bit
+      - Parity = ODD parity
+      - BaudRate = 9600 baud
+      - Hardware flow control disabled (RTS and CTS signals) */
+  UartHandle.Instance        = USARTx;
+  
+  UartHandle.Init.BaudRate   = 9600;
+  UartHandle.Init.WordLength = UART_WORDLENGTH_8B;
+  UartHandle.Init.StopBits   = UART_STOPBITS_1;
+  UartHandle.Init.Parity     = UART_PARITY_ODD;
+  UartHandle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;
+  UartHandle.Init.Mode       = UART_MODE_TX_RX;
+  
+  GPIO_InitTypeDef  GPIO_InitStruct;
+  
+  /*##-1- Enable peripherals and GPIO Clocks #################################*/
+  /* Enable GPIO TX/RX clock */
+  USARTx_TX_GPIO_CLK_ENABLE();
+  USARTx_RX_GPIO_CLK_ENABLE();
+  
+  /* Enable USARTx clock */
+  USARTx_CLK_ENABLE(); 
+  
+  /*##-2- Configure peripheral GPIO ##########################################*/  
+  /* UART TX GPIO pin configuration  */
+  GPIO_InitStruct.Pin       = USARTx_TX_PIN;
+  GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull      = GPIO_PULLUP;
+  GPIO_InitStruct.Speed     = GPIO_SPEED_FAST;
+  GPIO_InitStruct.Alternate = USARTx_TX_AF;
+  
+  HAL_GPIO_Init(USARTx_TX_GPIO_PORT, &GPIO_InitStruct);
+    
+  /* UART RX GPIO pin configuration  */
+  GPIO_InitStruct.Pin = USARTx_RX_PIN;
+  GPIO_InitStruct.Alternate = USARTx_RX_AF;
+    
+  HAL_GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStruct);
+  
+  if(HAL_UART_Init(&UartHandle) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler(); 
+  }
+  
+  /*while(1){
+    uart_sendChar('s'); 
+    for (int i=0;i<1000;i++) wait_ms(10);
+  }*/
+ 
+}
+
+void getUserCommand(){
+  initUART();
+}
+
+GPIO_InitTypeDef GPIO_InitStruct_Int;
+
+void initIntButt(){
+  GPIO_InitStruct_Int.Pin = 0x1;
+  GPIO_InitStruct_Int.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct_Int.Pull = GPIO_NOPULL;
+  GPIO_InitStruct_Int.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_Int); 
+}
 
 int main(void)
 {
   /* STM32F4xx HAL library initialization:
        - Configure the Flash prefetch, instruction and Data caches
        - Configure the Systick to generate an interrupt each 1 msec
-       - Set NVIC Group Priority to 4
+       - Set NVIC Group Priority to 4 
        - Global MSP (MCU Support Package) initialization
      */
   HAL_Init();
@@ -350,13 +423,17 @@ int main(void)
   __GPIOA_CLK_ENABLE();
   __GPIOB_CLK_ENABLE();
   __GPIOC_CLK_ENABLE();
-    
+  
   AD9117_init();
   AD9245_init();
-  //Test_init();
-  init_mDAC();
   
-  mDAC(8300);
+  init_mDAC();
+  initIntButt();
+  
+  initUART();
+  
+  uint16_t mDacValue=11000;
+  mDAC(mDacValue);
   
   __TIM5_CLK_ENABLE();
   init_timer();
@@ -373,7 +450,6 @@ int main(void)
   uint16_t filter_selected_order=6; 
   
   uint32_t counter=0;
-  uint16_t mDacValue=8192;
   
   while (1)
   {
@@ -384,9 +460,11 @@ int main(void)
     
     uint16_t value = AD9245_getValue();
     
+    //if (GPIOH->IDR & 0x1) getUserCommand(); //interrupt button which stops the filter execution and read user commands
+    
     value = sinTable[counter];
     counter++;
-    if(counter>1023) { counter=0; /*mDAC(mDacValue); mDacValue+=1; if(mDacValue>=16384) mDacValue=0;*/}
+    if(counter>1024/*16383*/) { counter=0; /*mDacValue++; if(mDacValue>16384) mDacValue=0; mDAC(mDacValue);*/}
     
     uint16_t i_d=i_data_input;
     data_input[i_data_input++]=(float)(value&0x7FFF);
@@ -409,6 +487,14 @@ int main(void)
     
     while (__HAL_TIM_GetCounter(&TimHandle)<100) {}     //85
   }
+}
+
+char uart_sendChar(char ch){
+  /* Place your implementation of fputc here */
+  /* e.g. write a character to the EVAL_COM1 and Loop until the end of transmission */
+  HAL_UART_Transmit(&UartHandle, (uint8_t *)&ch, 1, 0x100); 
+
+  return ch;
 }
 
 /**
