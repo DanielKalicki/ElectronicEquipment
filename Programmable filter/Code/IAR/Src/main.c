@@ -385,10 +385,10 @@ void initUART(){
     Error_Handler(); 
   }
   
-  /*while(1){
+  while(1){
     uart_sendChar('s'); 
     for (int i=0;i<1000;i++) wait_ms(10);
-  }*/
+  }
  
 }
 
@@ -399,10 +399,10 @@ void getUserCommand(){
 GPIO_InitTypeDef GPIO_InitStruct_Int;
 
 void initIntButt(){
-  GPIO_InitStruct_Int.Pin = 0x1;
+  GPIO_InitStruct_Int.Pin = GPIO_PIN_0;
   GPIO_InitStruct_Int.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct_Int.Pull = GPIO_NOPULL;
-  GPIO_InitStruct_Int.Speed = GPIO_SPEED_HIGH;
+  GPIO_InitStruct_Int.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct_Int.Speed = GPIO_SPEED_MEDIUM;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_Int); 
 }
 
@@ -429,8 +429,6 @@ int main(void)
   
   init_mDAC();
   initIntButt();
-  
-  initUART();
   
   uint16_t mDacValue=11000;
   mDAC(mDacValue);
@@ -461,6 +459,8 @@ int main(void)
     uint16_t value = AD9245_getValue();
     
     //if (GPIOH->IDR & 0x1) getUserCommand(); //interrupt button which stops the filter execution and read user commands
+    
+    while(GPIOB->IDR & GPIO_PIN_0) {getUserCommand();};
     
     value = sinTable[counter];
     counter++;
