@@ -4,10 +4,8 @@
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 #include "stm32F4xx_nucleo.h"
-
-//#include "mbed.h"
   
-        void wait_ms(uint8_t value);
+        void wait_ms();
 
         void AD9117_sendByte(uint8_t value);
         uint8_t AD9117_readByte();

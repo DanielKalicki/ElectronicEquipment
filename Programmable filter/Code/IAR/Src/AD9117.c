@@ -37,7 +37,7 @@ GPIO_InitTypeDef  GPIO_InitStruct_DAC;
 #define AD9117_SCLK_PIN GPIO_PIN_2
 #define AD9117_SDIO_PIN GPIO_PIN_12
 
-void wait_ms(uint8_t value);
+void wait_ms();
 void AD9117_initGPIO();
 
 void AD9117_setRegister(uint8_t number, uint8_t value){
@@ -108,15 +108,15 @@ void AD9117_init(){
     
     AD9117_setPowerDown(0,1,0,1,0,1,0,0);
     AD9117_setDataControl(0,1,1,0,1,0,0);
-    wait_ms(10);
+    wait_ms();
     //AD9117_setCalControl(0,0,0,1,1,0);
-    //wait_ms(10);
+    //wait_ms();
     AD9117_setIRCML(1,0x1E);    //0x10
-    wait_ms(10);
+    wait_ms();
     AD9117_setIRSET(1,0x00);    //0x10
-    wait_ms(10);
+    wait_ms();
     AD9117_setIDacGain(0x00);//deosnt affect the dc offset
-    wait_ms(10);
+    wait_ms();
 }
 
 void AD9117_setSDIOasOutput(){
@@ -153,7 +153,7 @@ void AD9117_initGPIO(){
   AD9117_setSDIOasOutput();
 }
 
-void wait_ms(uint8_t value){
+void wait_ms(){
   for (int i=0;i<1000;i++){
     __asm("NOP");
   }
@@ -170,10 +170,10 @@ void AD9117_sendByte( uint8_t data){
       HAL_GPIO_WritePin(GPIOB,AD9117_SDIO_PIN,GPIO_PIN_RESET);
         //mySDIO=0;
     }
-    wait_ms(1);
+    wait_ms();
     for (int i=7;i>-1;i--){
         HAL_GPIO_WritePin(GPIOB,AD9117_SCLK_PIN,GPIO_PIN_SET);//mySCLK=1;
-        wait_ms(1);
+        wait_ms();
         if((data & (1<<i))>0){
             HAL_GPIO_WritePin(GPIOB,AD9117_SDIO_PIN,GPIO_PIN_SET);//mySDIO = 1;
         }
@@ -181,10 +181,10 @@ void AD9117_sendByte( uint8_t data){
             HAL_GPIO_WritePin(GPIOB,AD9117_SDIO_PIN,GPIO_PIN_RESET);//mySDIO=0;
         }
         HAL_GPIO_WritePin(GPIOB,AD9117_SCLK_PIN,GPIO_PIN_RESET);//mySCLK = 0;
-        wait_ms(1);
+        wait_ms();
     }
     HAL_GPIO_WritePin(GPIOB,AD9117_SCLK_PIN,GPIO_PIN_SET);//mySCLK=1;
-    wait_ms(1);
+    wait_ms();
 }
 
 uint8_t AD9117_readByte(){
@@ -192,27 +192,27 @@ uint8_t AD9117_readByte(){
     AD9117_setSDIOasInput();
     for (int i=7;i>-1;i--){
         HAL_GPIO_WritePin(GPIOB,AD9117_SCLK_PIN,GPIO_PIN_RESET);//mySCLK = 0;
-        wait_ms(1);
+        wait_ms();
     
         if (HAL_GPIO_ReadPin(GPIOB,AD9117_SDIO_PIN)/*mySDIO.read()*/ == GPIO_PIN_SET){
             value += (1<<i);
         }
 
         HAL_GPIO_WritePin(GPIOB,AD9117_SCLK_PIN,GPIO_PIN_SET);//mySCLK=1;
-        wait_ms(1);
+        wait_ms();
     }
     HAL_GPIO_WritePin(GPIOB,AD9117_SCLK_PIN,GPIO_PIN_SET);//mySCLK=1;
-    wait_ms(1);
+    wait_ms();
     
     return value;
 }
 
 uint8_t AD9117_readRegister(uint8_t number){
     HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8,GPIO_PIN_RESET);
-    wait_ms(1); 
+    wait_ms(); 
     AD9117_sendByte(0x80+number);  
     uint8_t ret = AD9117_readByte();
-    wait_ms(1);
+    wait_ms();
     HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8,GPIO_PIN_SET);
     return ret;
 }

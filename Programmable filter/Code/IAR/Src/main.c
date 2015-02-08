@@ -1,71 +1,32 @@
-/**
-  ******************************************************************************
-  * @file    GPIO/GPIO_IOToggle/Src/main.c 
-  * @author  MCD Application Team
-  * @version V1.0.0
-  * @date    26-June-2014
-  * @brief   This example describes how to configure and use GPIOs through 
-  *          the STM32F4xx HAL API.
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; COPYRIGHT(c) 2014 STMicroelectronics</center></h2>
-  *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  *
-  ******************************************************************************
-  */
-
-/* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include "AD9117.h"
-#include "stm32f4xx_hal_uart.h"
 
-/** @addtogroup STM32F4xx_HAL_Examples
-  * @{
-  */
-
-/** @addtogroup GPIO_IOToggle
-  * @{
-  */ 
-
-/* Private typedef -----------------------------------------------------------*/
-/* Private define ------------------------------------------------------------*/
-
-
-/* Private macro -------------------------------------------------------------*/
-/* Private variables ---------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
 static void SystemClock_Config(void);
 static void Error_Handler(void);
+char uart_sendChar(char ch);
+uint16_t uart_readChar();
+void parseReceivedData(char *data);
 
-/* Private functions ---------------------------------------------------------*/
-
+UART_HandleTypeDef UartHandle;
 GPIO_InitTypeDef GPIO_InitStruct_ADC;
 TIM_HandleTypeDef        TimHandle;
+GPIO_InitTypeDef  GPIO_InitStruct_mDAC;
+GPIO_InitTypeDef GPIO_InitStruct_Int;
 
+#define MDAC_SYNC       GPIO_PIN_14
+#define MDAC_SDIN       GPIO_PIN_15
+#define MDAC_SCLK       GPIO_PIN_13
+
+#define DATA_BUFF_SIZE 100
+#define FILTER_MAX_ORDER 100
+
+#define UART_RX_TERMINATOR '\n'
+
+//------------------------------------------//
+//------------ADC functions-----------------//
+//------------------------------------------//
 void AD9245_init(){
   GPIO_InitStruct_ADC.Pin = 0xFFFF;
   GPIO_InitStruct_ADC.Mode = GPIO_MODE_INPUT;
@@ -73,7 +34,15 @@ void AD9245_init(){
   GPIO_InitStruct_ADC.Speed = GPIO_SPEED_HIGH;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct_ADC); 
 }
+inline uint16_t AD9245_getValue(){      
+  //this function takes 2 clock cycles
+  uint16_t ret = (GPIOC->IDR & 0x7FFF);
+  return ret;
+}
 
+//----------------------------------------//
+//-----------Test functions--------------//
+//---------------------------------------//
 void Test_init(){
   GPIO_InitStruct_ADC.Pin = 0x8000;
   GPIO_InitStruct_ADC.Mode = GPIO_MODE_OUTPUT_PP;
@@ -81,115 +50,6 @@ void Test_init(){
   GPIO_InitStruct_ADC.Speed = GPIO_SPEED_HIGH;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_ADC); 
 }
-
-inline uint16_t AD9245_getValue(){                             //this function takes 2 clock cycles
-  uint16_t ret = (GPIOC->IDR & 0x7FFF);
-  return ret;
-}
-
-void init_timer()
-{
-  uint32_t TickPriority=1;
-  
-  RCC_ClkInitTypeDef sClokConfig;
-  uint32_t uwTimclock, uwAPB1Prescaler = 0;
-  uint32_t pFLatency;
-  
-    /*Configure the TIM5 IRQ priority */
-  HAL_NVIC_SetPriority(TIM5_IRQn, TickPriority ,0); 
-  
-  /* Get clock configuration */
-  HAL_RCC_GetClockConfig(&sClokConfig, &pFLatency);
-  
-  /* Get APB1 prescaler */
-  uwAPB1Prescaler = sClokConfig.APB1CLKDivider;
-  
-  /* Compute TIM5 clock */
-  if (uwAPB1Prescaler == 0) 
-  {
-    uwTimclock = HAL_RCC_GetPCLK1Freq();
-  }
-  else
-  {
-    uwTimclock = 2*HAL_RCC_GetPCLK1Freq();
-  }
-
-  /* Initialize TIM5 */
-  TimHandle.Instance = TIM5;
-    
-  /* Initialize TIMx peripheral as follow:
-       + Period = [(TIM5CLK/1000) - 1]. to have a (1/1000) s time base.
-       + Prescaler = (uwTimclock/1000000 - 1) to have a 1MHz counter clock.
-       + ClockDivision = 0
-       + Counter direction = Up
-  */
-  TimHandle.Init.Period = 0x110;
-  TimHandle.Init.Prescaler = 0;
-  TimHandle.Init.ClockDivision = 0;
-  TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
-  if(HAL_TIM_Base_Init(&TimHandle) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-  
-  /* Start the TIM time Base generation in interrupt mode */
-  if(HAL_TIM_Base_Start_IT(&TimHandle) != HAL_OK)
-  {
-    /* Starting Error */
-    Error_Handler();
-  }
-  
-}
-
-GPIO_InitTypeDef  GPIO_InitStruct_mDAC;
-
-#define MDAC_SYNC       GPIO_PIN_14
-#define MDAC_SDIN       GPIO_PIN_15
-#define MDAC_SCLK       GPIO_PIN_13
-
-void init_mDAC(){
-  //pins initialization
-  /*GPIO_InitStruct_mDAC.Pin =  MDAC_SYNC | MDAC_SDIN;
-  GPIO_InitStruct_mDAC.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct_mDAC.Pull = GPIO_NOPULL;
-  GPIO_InitStruct_mDAC.Speed = GPIO_SPEED_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_mDAC); */
-  
-  GPIO_InitStruct_ADC.Pin = MDAC_SDIN | MDAC_SYNC | MDAC_SCLK;
-  GPIO_InitStruct_ADC.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct_ADC.Pull = GPIO_NOPULL;
-  GPIO_InitStruct_ADC.Speed = GPIO_SPEED_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_ADC); 
-  
-  wait_ms(10);
-  //set all pins by default to High
-  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
-  HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
-  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
-  for (int i=0;i<100;i++) wait_ms(10);
-}
-
-void mDAC(uint16_t data){ //max 16383
-  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
-  
-  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_RESET); 
-  
-  for (int i=15;i>-1;i--){
-    if (data & (1<<i)){
-      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
-    } else {
-      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
-    }
-    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_RESET); 
-    
-    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
-  }
-  
-  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
-  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
-}
-
 uint16_t sinTable[] = {
   0x2000,0x2032,0x2065,0x2097,0x20c9,0x20fc,0x212e,0x2160,
 0x2192,0x21c5,0x21f7,0x2229,0x225b,0x228d,0x22c0,0x22f2,
@@ -328,12 +188,110 @@ uint16_t sinTable[] = {
 0x1d0e,0x1d40,0x1d73,0x1da5,0x1dd7,0x1e09,0x1e3b,0x1e6e,
 0x1ea0,0x1ed2,0x1f04,0x1f37,0x1f69,0x1f9b,0x1fce,0x2000};
 
+//-------------------------------------------//
+//-----------------Timer---------------------//
+//-------------------------------------------//
+void init_timer(){
+  uint32_t TickPriority=1;
+  
+  RCC_ClkInitTypeDef sClokConfig;
+  uint32_t uwTimclock, uwAPB1Prescaler = 0;
+  uint32_t pFLatency;
+  
+    /*Configure the TIM5 IRQ priority */
+  HAL_NVIC_SetPriority(TIM5_IRQn, TickPriority ,0); 
+  
+  /* Get clock configuration */
+  HAL_RCC_GetClockConfig(&sClokConfig, &pFLatency);
+  
+  /* Get APB1 prescaler */
+  uwAPB1Prescaler = sClokConfig.APB1CLKDivider;
+  
+  /* Compute TIM5 clock */
+  if (uwAPB1Prescaler == 0) 
+  {
+    uwTimclock = HAL_RCC_GetPCLK1Freq();
+  }
+  else
+  {
+    uwTimclock = 2*HAL_RCC_GetPCLK1Freq();
+  }
 
-char uart_sendChar(char ch);
+  /* Initialize TIM5 */
+  TimHandle.Instance = TIM5;
+    
+  /* Initialize TIMx peripheral as follow:
+       + Period = [(TIM5CLK/1000) - 1]. to have a (1/1000) s time base.
+       + Prescaler = (uwTimclock/1000000 - 1) to have a 1MHz counter clock.
+       + ClockDivision = 0
+       + Counter direction = Up
+  */
+  TimHandle.Init.Period = 0x110;
+  TimHandle.Init.Prescaler = 0;
+  TimHandle.Init.ClockDivision = 0;
+  TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
+  if(HAL_TIM_Base_Init(&TimHandle) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+  
+  /* Start the TIM time Base generation in interrupt mode */
+  if(HAL_TIM_Base_Start_IT(&TimHandle) != HAL_OK)
+  {
+    /* Starting Error */
+    Error_Handler();
+  }
+  
+}
 
-UART_HandleTypeDef UartHandle;
+//-------------------------------------------//
+//-----------------mDAC---------------------//
+//------------------------------------------//
+void init_mDAC(){
+  //pins initialization
+  /*GPIO_InitStruct_mDAC.Pin =  MDAC_SYNC | MDAC_SDIN;
+  GPIO_InitStruct_mDAC.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct_mDAC.Pull = GPIO_NOPULL;
+  GPIO_InitStruct_mDAC.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_mDAC); */
+  
+  GPIO_InitStruct_ADC.Pin = MDAC_SDIN | MDAC_SYNC | MDAC_SCLK;
+  GPIO_InitStruct_ADC.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct_ADC.Pull = GPIO_NOPULL;
+  GPIO_InitStruct_ADC.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_ADC); 
+  
+  wait_ms(10);
+  //set all pins by default to High
+  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+  for (int i=0;i<100;i++) wait_ms(10);
+}
+void mDAC(uint16_t data){ //max 16383
+  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
+  
+  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_RESET); 
+  
+  for (int i=15;i>-1;i--){
+    if (data & (1<<i)){
+      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+    } else {
+      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
+    }
+    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_RESET); 
+    
+    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
+  }
+  
+  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+}
 
-
+//---------------------------------------//
+//----------------UART------------------//
+//-------------------------------------//
 void initUART(){
   
   /*##-1- Configure the UART peripheral ######################################*/
@@ -341,7 +299,7 @@ void initUART(){
   /* UART1 configured as follow:
       - Word Length = 8 Bits
       - Stop Bit = One Stop bit
-      - Parity = ODD parity
+      - Parity = None parity
       - BaudRate = 9600 baud
       - Hardware flow control disabled (RTS and CTS signals) */
   UartHandle.Instance        = USARTx;
@@ -349,7 +307,7 @@ void initUART(){
   UartHandle.Init.BaudRate   = 9600;
   UartHandle.Init.WordLength = UART_WORDLENGTH_8B;
   UartHandle.Init.StopBits   = UART_STOPBITS_1;
-  UartHandle.Init.Parity     = UART_PARITY_ODD;
+  UartHandle.Init.Parity     = UART_PARITY_NONE;
   UartHandle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;
   UartHandle.Init.Mode       = UART_MODE_TX_RX;
   
@@ -384,20 +342,35 @@ void initUART(){
     /* Initialization Error */
     Error_Handler(); 
   }
-  
-  while(1){
-    uart_sendChar('s'); 
-    for (int i=0;i<1000;i++) wait_ms(10);
-  }
  
 }
-
 void getUserCommand(){
   initUART();
+  
+  char dataBuffer[30];
+  for (int i=0;i<30;i++) dataBuffer[i]=0;
+  int i_dataBuffer=0;
+  
+  while(GPIOB->IDR & GPIO_PIN_0){
+    
+    //write char 's' for test
+    //uart_sendChar('s'); 
+    //for (int i=0;i<10000;i++) wait_ms();
+    
+    //read char and write it back to the user
+    uint16_t ch = uart_readChar();
+    if(ch<256){  
+      uart_sendChar((uint8_t)ch);  
+      dataBuffer[i_dataBuffer]=ch;
+      i_dataBuffer++;
+      if(i_dataBuffer>30) i_dataBuffer=29;
+      
+      if(ch==UART_RX_TERMINATOR){ parseReceivedData(dataBuffer); i_dataBuffer=0;}
+    }
+    
+  }
+  AD9117_init();
 }
-
-GPIO_InitTypeDef GPIO_InitStruct_Int;
-
 void initIntButt(){
   GPIO_InitStruct_Int.Pin = GPIO_PIN_0;
   GPIO_InitStruct_Int.Mode = GPIO_MODE_INPUT;
@@ -405,9 +378,48 @@ void initIntButt(){
   GPIO_InitStruct_Int.Speed = GPIO_SPEED_MEDIUM;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_Int); 
 }
+/*Send one char to the user using UART*/
+char uart_sendChar(char ch){
+  HAL_UART_Transmit(&UartHandle, (uint8_t *)&ch, 1, 0x100); 
+  return ch;
+}
+uint16_t uart_readChar(){
+   uint16_t ch=0;
+   if (HAL_UART_Receive(&UartHandle, (uint8_t *)&ch, 1, 0x1000)!=HAL_OK){
+    ch=257;
+   }
+   return ch;
+}
 
-int main(void)
-{
+void parseReceivedData(char *data){
+  
+  char numb[10];
+  for (int i=0;i<10;i++) numb[i]=0;
+  
+  int i_numb=0;
+  for (int i=0;i<30;i++){
+    if(data[i]==UART_RX_TERMINATOR) break;
+    if(data[i]>='0' && data[i]<='9'){
+      numb[i_numb]=data[i];
+      i_numb++;
+      if(i_numb==9) break;
+    }
+  }
+  numb[i_numb]=0;
+  
+  int intValue = atoi(numb);
+  
+  switch (data[0]){
+  case 'G':     //mDAC gain adjustment
+    mDAC((uint16_t)intValue%16384);
+    break;
+  }
+}
+
+//-------------------------------------//
+//--------------MAIN-------------------//
+//-------------------------------------//
+int main(void){
   /* STM32F4xx HAL library initialization:
        - Configure the Flash prefetch, instruction and Data caches
        - Configure the Systick to generate an interrupt each 1 msec
@@ -424,27 +436,28 @@ int main(void)
   __GPIOB_CLK_ENABLE();
   __GPIOC_CLK_ENABLE();
   
+  /*Initialized ports and devices*/
   AD9117_init();
   AD9245_init();
-  
   init_mDAC();
   initIntButt();
   
+  /*set the initial mDacValue*/
   uint16_t mDacValue=11000;
   mDAC(mDacValue);
   
+  /*Init timer*/
   __TIM5_CLK_ENABLE();
   init_timer();
   
-  #define DATA_BUFF_SIZE 100
+  /*data buffer initialization*/
   float data_input[DATA_BUFF_SIZE];
-  for (int i=0;i<DATA_BUFF_SIZE;++i){ data_input[i]=0; }    //initialization
+  for (int i=0;i<DATA_BUFF_SIZE;++i){ data_input[i]=0; }    //initialization with zeros
   uint16_t i_data_input=0;
   
-  #define FILTER_MAX_ORDER 100
+  /*filter array initialization*/
   float filter_coeff[FILTER_MAX_ORDER];
-  for (int i=0;i<FILTER_MAX_ORDER;++i){ filter_coeff[i]=0; } //for test
-  filter_coeff[0]=1;
+  for (int i=0;i<FILTER_MAX_ORDER;++i){ filter_coeff[i]=0; } filter_coeff[0]=1; //filter initialy is set to pass through the data
   uint16_t filter_selected_order=6; 
   
   uint32_t counter=0;
@@ -452,20 +465,22 @@ int main(void)
   while (1)
   {
     
-    __HAL_TIM_SetCounter(&TimHandle,0);
-    
-    //GPIOB->BSRRL = 0x8000;
-    
+    /*start timer to count loop execution time*/
+    __HAL_TIM_SetCounter(&TimHandle,0); 
+
+    /*read value from the ADC*/
     uint16_t value = AD9245_getValue();
     
-    //if (GPIOH->IDR & 0x1) getUserCommand(); //interrupt button which stops the filter execution and read user commands
-    
+    /*interrupt button to stops the filter execution and read user commands
+      it is not implemented as an interrupt because it will require filter_coeff to be define as volatile which requires more cycles to read.*/
     while(GPIOB->IDR & GPIO_PIN_0) {getUserCommand();};
     
+    /*Test values for the DAC*/
     value = sinTable[counter];
     counter++;
     if(counter>1024/*16383*/) { counter=0; /*mDacValue++; if(mDacValue>16384) mDacValue=0; mDAC(mDacValue);*/}
     
+    /*Calculate the filter output*/
     uint16_t i_d=i_data_input;
     data_input[i_data_input++]=(float)(value&0x7FFF);
     if(i_data_input>=DATA_BUFF_SIZE) i_data_input=0;
@@ -477,8 +492,7 @@ int main(void)
     }
     uint16_t uiOutput=(uint16_t)fOutput;
     
-    //GPIOB->BSRRH = 0x8000;
-
+    /*Output teh result to the DAC*/
     #define AD9117_DCLKIO_PIN GPIO_PIN_9
     GPIOB->BSRRL = AD9117_DCLKIO_PIN;
     GPIOA->BSRRL = uiOutput;
@@ -489,15 +503,10 @@ int main(void)
   }
 }
 
-char uart_sendChar(char ch){
-  /* Place your implementation of fputc here */
-  /* e.g. write a character to the EVAL_COM1 and Loop until the end of transmission */
-  HAL_UART_Transmit(&UartHandle, (uint8_t *)&ch, 1, 0x100); 
-
-  return ch;
-}
-
-/**
+/*Setup the system clock*/
+static void SystemClock_Config(void){
+  
+  /**
   * @brief  System Clock Configuration
   *         The system Clock is configured as follow : 
   *            System Clock source            = PLL (HSI)
@@ -517,8 +526,7 @@ char uart_sendChar(char ch){
   * @param  None
   * @retval None
   */
-static void SystemClock_Config(void)
-{
+  
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
   RCC_OscInitTypeDef RCC_OscInitStruct;
 
@@ -558,29 +566,28 @@ static void SystemClock_Config(void)
   }
 }
 
-/**
+static void Error_Handler(void){
+  /**
   * @brief  This function is executed in case of error occurrence.
   * @param  None
   * @retval None
   */
-static void Error_Handler(void)
-{
+  
   while(1)
   {
   }
 }
 
 #ifdef  USE_FULL_ASSERT
-
-/**
+void assert_failed(uint8_t* file, uint32_t line){ 
+  /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
   * @param  file: pointer to the source file name
   * @param  line: assert_param error line source number
   * @retval None
   */
-void assert_failed(uint8_t* file, uint32_t line)
-{ 
+  
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
 
@@ -590,13 +597,3 @@ void assert_failed(uint8_t* file, uint32_t line)
   }
 }
 #endif
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
