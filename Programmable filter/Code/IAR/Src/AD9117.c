@@ -137,7 +137,7 @@ void AD9117_setSDIOasInput(){
 
 void AD9117_initGPIO(){
   //DAC pins
-  GPIO_InitStruct_DAC.Pin = 0xFFFF;
+  GPIO_InitStruct_DAC.Pin = 0x3FFF;
   GPIO_InitStruct_DAC.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct_DAC.Pull = GPIO_NOPULL;
   GPIO_InitStruct_DAC.Speed = GPIO_SPEED_HIGH;

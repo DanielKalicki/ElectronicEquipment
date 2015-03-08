@@ -15,9 +15,14 @@ TIM_HandleTypeDef        TimHandle;
 GPIO_InitTypeDef  GPIO_InitStruct_mDAC;
 GPIO_InitTypeDef GPIO_InitStruct_Int;
 
-#define MDAC_SYNC       GPIO_PIN_14
-#define MDAC_SDIN       GPIO_PIN_15
-#define MDAC_SCLK       GPIO_PIN_13
+#define MDAC_OUT_SYNC       GPIO_PIN_14 //PORTB
+#define MDAC_OUT_SDIN       GPIO_PIN_15 //PORTB
+#define MDAC_OUT_SCLK       GPIO_PIN_13 //PORTB
+
+#define MDAC_IN_SYNC       GPIO_PIN_2  //PORTD
+#define MDAC_IN_SYNC_PORT  GPIOD       //PORTD
+#define MDAC_IN_SDIN       GPIO_PIN_15  //PORTB
+#define MDAC_IN_SCLK       GPIO_PIN_13  //PORTB
 
 #define DATA_BUFF_SIZE 100
 #define FILTER_MAX_ORDER 100
@@ -248,15 +253,9 @@ void init_timer(){
 //-------------------------------------------//
 //-----------------mDAC---------------------//
 //------------------------------------------//
-void init_mDAC(){
+void init_mDAC_output(){
   //pins initialization
-  /*GPIO_InitStruct_mDAC.Pin =  MDAC_SYNC | MDAC_SDIN;
-  GPIO_InitStruct_mDAC.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct_mDAC.Pull = GPIO_NOPULL;
-  GPIO_InitStruct_mDAC.Speed = GPIO_SPEED_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct_mDAC); */
-  
-  GPIO_InitStruct_ADC.Pin = MDAC_SDIN | MDAC_SYNC | MDAC_SCLK;
+  GPIO_InitStruct_ADC.Pin = MDAC_OUT_SDIN | MDAC_OUT_SYNC | MDAC_OUT_SCLK;
   GPIO_InitStruct_ADC.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct_ADC.Pull = GPIO_NOPULL;
   GPIO_InitStruct_ADC.Speed = GPIO_SPEED_HIGH;
@@ -264,31 +263,70 @@ void init_mDAC(){
   
   wait_ms(10);
   //set all pins by default to High
-  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
-  HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
-  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SCLK,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SDIN,GPIO_PIN_SET); 
   for (int i=0;i<100;i++) wait_ms(10);
 }
-void mDAC(uint16_t data){ //max 16383
-  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
+void mDAC_output(uint16_t data){ //max 16383
+  HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SDIN,GPIO_PIN_RESET); 
   
-  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_RESET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SYNC,GPIO_PIN_RESET); 
   
   for (int i=15;i>-1;i--){
     if (data & (1<<i)){
-      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+      HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SDIN,GPIO_PIN_SET); 
     } else {
-      HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_RESET); 
+      HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SDIN,GPIO_PIN_RESET); 
     }
-    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_RESET); 
+    HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SCLK,GPIO_PIN_RESET); 
     
-    HAL_GPIO_WritePin(GPIOB,MDAC_SCLK,GPIO_PIN_SET); 
+    HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SCLK,GPIO_PIN_SET); 
   }
   
-  HAL_GPIO_WritePin(GPIOB,MDAC_SYNC,GPIO_PIN_SET); 
-  HAL_GPIO_WritePin(GPIOB,MDAC_SDIN,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_OUT_SDIN,GPIO_PIN_SET); 
 }
 
+void init_mDAC_input(){
+  
+  //SDIN and SCLK are initialized in mDAC_output();
+  
+  GPIO_InitTypeDef  GPIO_InitStruct_DAC;
+  
+  //pins initialization
+  GPIO_InitStruct_DAC.Pin = MDAC_IN_SYNC;
+  GPIO_InitStruct_DAC.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct_DAC.Pull = GPIO_NOPULL;
+  GPIO_InitStruct_DAC.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(MDAC_IN_SYNC_PORT, &GPIO_InitStruct_DAC); 
+  
+  wait_ms(10);
+  //set all pins by default to High
+  HAL_GPIO_WritePin(MDAC_IN_SYNC_PORT,MDAC_IN_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_IN_SCLK,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_IN_SDIN,GPIO_PIN_SET); 
+  for (int i=0;i<100;i++) wait_ms(10);
+}
+void mDAC_input(uint16_t data){ //max 16383
+  HAL_GPIO_WritePin(GPIOB,MDAC_IN_SDIN,GPIO_PIN_RESET); 
+  
+  HAL_GPIO_WritePin(MDAC_IN_SYNC_PORT,MDAC_IN_SYNC,GPIO_PIN_RESET); 
+  
+  for (int i=15;i>-1;i--){
+    if (data & (1<<i)){
+      HAL_GPIO_WritePin(GPIOB,MDAC_IN_SDIN,GPIO_PIN_SET); 
+    } else {
+      HAL_GPIO_WritePin(GPIOB,MDAC_IN_SDIN,GPIO_PIN_RESET); 
+    }
+    HAL_GPIO_WritePin(GPIOB,MDAC_IN_SCLK,GPIO_PIN_RESET); 
+    
+    HAL_GPIO_WritePin(GPIOB,MDAC_IN_SCLK,GPIO_PIN_SET); 
+  }
+  
+  HAL_GPIO_WritePin(MDAC_IN_SYNC_PORT,MDAC_IN_SYNC,GPIO_PIN_SET); 
+  HAL_GPIO_WritePin(GPIOB,MDAC_IN_SDIN,GPIO_PIN_SET); 
+}
 //---------------------------------------//
 //----------------UART------------------//
 //-------------------------------------//
@@ -352,11 +390,7 @@ void getUserCommand(){
   int i_dataBuffer=0;
   
   while(GPIOB->IDR & GPIO_PIN_0){
-    
-    //write char 's' for test
-    //uart_sendChar('s'); 
-    //for (int i=0;i<10000;i++) wait_ms();
-    
+
     //read char and write it back to the user
     uint16_t ch = uart_readChar();
     if(ch<256){  
@@ -410,8 +444,11 @@ void parseReceivedData(char *data){
   int intValue = atoi(numb);
   
   switch (data[0]){
-  case 'G':     //mDAC gain adjustment
-    mDAC((uint16_t)intValue%16384);
+  case 'G':     //output mDAC gain adjustment
+    mDAC_output((uint16_t)intValue%16384);
+    break;
+  case 'g':     //input mDAC gain adjustment
+    mDAC_input((uint16_t)intValue%16384);
     break;
   }
 }
@@ -435,16 +472,22 @@ int main(void){
   __GPIOA_CLK_ENABLE();
   __GPIOB_CLK_ENABLE();
   __GPIOC_CLK_ENABLE();
+  __GPIOD_CLK_ENABLE();
   
   /*Initialized ports and devices*/
   AD9117_init();
   AD9245_init();
-  init_mDAC();
+  init_mDAC_output();
+  init_mDAC_input();
   initIntButt();
   
-  /*set the initial mDacValue*/
-  uint16_t mDacValue=11000;
-  mDAC(mDacValue);
+  /*set the initial mDacOutputValue*/
+  uint16_t mDacOutputValue=11000;
+  mDAC_output(mDacOutputValue);
+  
+  /*set the initial mDacInputValue*/
+  uint16_t mDacInputValue=11000;
+  mDAC_input(mDacInputValue);
   
   /*Init timer*/
   __TIM5_CLK_ENABLE();
@@ -476,9 +519,9 @@ int main(void){
     while(GPIOB->IDR & GPIO_PIN_0) {getUserCommand();};
     
     /*Test values for the DAC*/
-    value = sinTable[counter];
-    counter++;
-    if(counter>1024/*16383*/) { counter=0; /*mDacValue++; if(mDacValue>16384) mDacValue=0; mDAC(mDacValue);*/}
+    //value = sinTable[counter];
+    //counter++;
+    //if(counter>1024/*16383*/) { counter=0; /*mDacValue++; if(mDacValue>16384) mDacValue=0; mDAC(mDacValue);*/}
     
     /*Calculate the filter output*/
     uint16_t i_d=i_data_input;
