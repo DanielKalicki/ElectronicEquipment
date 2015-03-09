@@ -24,8 +24,8 @@ GPIO_InitTypeDef GPIO_InitStruct_Int;
 #define MDAC_IN_SDIN       GPIO_PIN_15  //PORTB
 #define MDAC_IN_SCLK       GPIO_PIN_13  //PORTB
 
-#define DATA_BUFF_SIZE 100
-#define FILTER_MAX_ORDER 100
+#define DATA_BUFF_SIZE 50
+#define FILTER_MAX_ORDER 50
 
 #define UART_RX_TERMINATOR '\n'
 
@@ -425,14 +425,25 @@ uint16_t uart_readChar(){
    return ch;
 }
 
+#define NUM_SIZE 50
+float num[NUM_SIZE];      //TODO change to float
+int num_order=0;
+
+#define DEN_SIZE 50
+float den[DEN_SIZE];      //TODO change to float
+int den_order=0;
+
 void parseReceivedData(char *data){
   
   char numb[10];
+  char numb2[10];
   for (int i=0;i<10;i++) numb[i]=0;
   
   int i_numb=0;
+  int bCharPos=0;
   for (int i=0;i<30;i++){
-    if(data[i]==UART_RX_TERMINATOR) break;
+    bCharPos=i;
+    if(data[i]==UART_RX_TERMINATOR || data[i]==':') break;
     if(data[i]>='0' && data[i]<='9'){
       numb[i_numb]=data[i];
       i_numb++;
@@ -441,14 +452,77 @@ void parseReceivedData(char *data){
   }
   numb[i_numb]=0;
   
+  int i_numb2=0;
+  for (int i=bCharPos;i<30;i++){
+    if(data[i]==UART_RX_TERMINATOR) break;
+    if(data[i]>='0' && data[i]<='9' || data[i]=='.'){
+      numb2[i_numb2]=data[i];
+      i_numb2++;
+      if(i_numb2==9) break;
+    }
+  }
+  numb2[i_numb2]=0;
+  
   int intValue = atoi(numb);
+  int intValue2 = atoi(numb2);
+  float floatValue2 = atof(numb2);
+  
+  //    numerator
+  //    ---------
+  //   denumerator
   
   switch (data[0]){
   case 'G':     //output mDAC gain adjustment
-    mDAC_output((uint16_t)intValue%16384);
+    mDAC_output((uint16_t)intValue2%16384);
     break;
   case 'g':     //input mDAC gain adjustment
-    mDAC_input((uint16_t)intValue%16384);
+    mDAC_input((uint16_t)intValue2%16384);
+    break;
+  case 'n':  //numerator
+    if(intValue<NUM_SIZE){
+      num[intValue]=floatValue2;
+    }
+    break;
+  case 'd':  //denumerator
+    if(intValue<DEN_SIZE){
+      den[intValue]=floatValue2;
+    }
+    break;
+  case 'N':  //numerator order
+    if(intValue<NUM_SIZE){
+      num_order=intValue2;
+      uart_sendChar(num_order);
+    }
+    break;
+  case 'D':  //denumerator order
+    if(intValue<DEN_SIZE){
+      den_order=intValue2;
+      uart_sendChar(den_order);
+    }
+    break;
+  case 'S':    //print out current filter coefficients
+    uart_sendChar('\n');
+    for (int i=0;i<den_order;i++){
+      char buff[30];
+      for (int ii=0;ii<30;ii++) buff[ii]=0;
+      sprintf(buff,"%d ",(int)(den[i]*100));
+      for (int ii=0;ii<30;ii++){
+        if(buff[ii]==0) break;
+        uart_sendChar(buff[ii]);
+      }
+    }
+    uart_sendChar('\n');
+    uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');
+    uart_sendChar('\n');
+    for (int i=0;i<num_order;i++){
+      char buff[30];
+      for (int ii=0;ii<30;ii++) buff[ii]=0;
+      sprintf(buff,"%d ",(int)(num[i]*100));
+      for (int ii=0;ii<30;ii++){
+        if(buff[ii]==0) break;
+        uart_sendChar(buff[ii]);
+      }
+    }
     break;
   }
 }
@@ -486,7 +560,7 @@ int main(void){
   mDAC_output(mDacOutputValue);
   
   /*set the initial mDacInputValue*/
-  uint16_t mDacInputValue=11000;
+  uint16_t mDacInputValue=9600;
   mDAC_input(mDacInputValue);
   
   /*Init timer*/
