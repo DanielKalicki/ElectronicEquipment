@@ -455,7 +455,8 @@ void parseReceivedData(char *data){
   int i_numb2=0;
   for (int i=bCharPos;i<30;i++){
     if(data[i]==UART_RX_TERMINATOR) break;
-    if(data[i]>='0' && data[i]<='9' || data[i]=='.'){
+    if(data[i]>='0' && data[i]<='9' || data[i]=='.' || data[i]==',' || data[i]=='-'){
+      if(data[i]==',') data[i]='.'; //replace comma (,) with a dot (.)
       numb2[i_numb2]=data[i];
       i_numb2++;
       if(i_numb2==9) break;
@@ -501,11 +502,10 @@ void parseReceivedData(char *data){
     }
     break;
   case 'S':    //print out current filter coefficients
-    uart_sendChar('\n');
-    for (int i=0;i<den_order;i++){
+    for (int i=0;i<num_order;i++){
       char buff[30];
       for (int ii=0;ii<30;ii++) buff[ii]=0;
-      sprintf(buff,"%d ",(int)(den[i]*100));
+      sprintf(buff,"%d%d ",(int)(num[i]*1000),(int)(abs((long int)(num[i]*10000000)%10000)));
       for (int ii=0;ii<30;ii++){
         if(buff[ii]==0) break;
         uart_sendChar(buff[ii]);
@@ -514,10 +514,10 @@ void parseReceivedData(char *data){
     uart_sendChar('\n');
     uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');uart_sendChar('-');
     uart_sendChar('\n');
-    for (int i=0;i<num_order;i++){
+        for (int i=0;i<den_order;i++){
       char buff[30];
       for (int ii=0;ii<30;ii++) buff[ii]=0;
-      sprintf(buff,"%d ",(int)(num[i]*100));
+      sprintf(buff,"%d%d ",(int)(den[i]*1000),(int)(abs((long int)(den[i]*10000000)%10000)));
       for (int ii=0;ii<30;ii++){
         if(buff[ii]==0) break;
         uart_sendChar(buff[ii]);
@@ -573,11 +573,15 @@ int main(void){
   uint16_t i_data_input=0;
   
   /*filter array initialization*/
-  float filter_coeff[FILTER_MAX_ORDER];
+  /*float filter_coeff[FILTER_MAX_ORDER];
   for (int i=0;i<FILTER_MAX_ORDER;++i){ filter_coeff[i]=0; } filter_coeff[0]=1; //filter initialy is set to pass through the data
   uint16_t filter_selected_order=6; 
+  uint32_t counter=0;*/
   
-  uint32_t counter=0;
+  for (int i=0;i<DEN_SIZE;++i){ den[i]=0; } den[0]=1;
+  den_order=6;
+  for (int i=0;i<NUM_SIZE;++i){ num[i]=0; } num[0]=1;
+  num_order=6;
   
   while (1)
   {
@@ -603,8 +607,8 @@ int main(void){
     if(i_data_input>=DATA_BUFF_SIZE) i_data_input=0;
     float fOutput=0;
     uint16_t i_f=0;
-    for (;i_f<filter_selected_order;++i_f,--i_d){
-      fOutput+=filter_coeff[i_f]*data_input[i_d];
+    for (;i_f<den_order;++i_f,--i_d){
+      fOutput+=den[i_f]*data_input[i_d];
       if(i_d==0) i_d=DATA_BUFF_SIZE;
     }
     uint16_t uiOutput=(uint16_t)fOutput;
