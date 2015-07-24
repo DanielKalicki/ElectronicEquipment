@@ -1,0 +1,29 @@
+<html><body>
+<head><link rel="stylesheet" type="text/css" href="style.css"></head>
+<pre>if (a == 2)
+</pre><pre>{ 
+</pre><pre>    <a>if</a>(b == 3)  /* fail Rule 3.5a */
+</pre><pre>    {
+</pre><pre>        fun(a,b<a>,</a>c); /* fail Rule 3.5b */
+</pre><pre>        fun(a, b, c);
+</pre><pre>    }
+</pre><pre>    <a>else</a>(b == 3)    /* fail Rule 3.5a */
+</pre><pre>    {
+</pre><pre>        foo(a, b, c, d,e<a>,</a>f); /* fail Rule 3.5b */
+</pre><pre>        c = a / b;
+</pre><pre>        c|=a<a>+</a>b;
+</pre><pre>        a <a>&</a>= b / b;
+</pre><pre>    }
+</pre><pre>    <a>while</a>(b == 3) /* fail Rule 3.5a */
+</pre><pre>    {
+</pre><pre>        a+<a>+</a>;
+</pre><pre>        <a>a +<</a>a>+</a>; /* fail Rule 3.5c */
+</pre><pre>        -<a>-</a>b;
+</pre><pre>        <a><a>-</a></a>- b; /* fail Rule 3.5c */
+</pre><pre>        !a;
+</pre><pre>        ~a;
+</pre><pre>        <a>! </a>a;  /* fail Rule 3.5c */
+</pre><pre>    }
+</pre><pre>}
+</pre>
+</body></html>
